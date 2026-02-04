@@ -7,23 +7,14 @@ from torch.utils.data import Dataset
 from pycocotools.coco import COCO
 
 class COCODataset(Dataset):
-    def __init__(self, root, ann_file, img_size=640, mosaic=True, transform=None):
-        """
-        Args:
-            root (str): Path to image directory
-            ann_file (str): Path to json annotation file
-            img_size (int): Target size (e.g., 640 or 512 for 6GB VRAM)
-            mosaic (bool): Enable Mosaic Augmentation (Best for SOTA training)
-            transform (bool): Basic transform (Normalize, ToTensor)
-        """
+    def __init__(self, root, ann_file, img_size=640, mosaic=True):
         self.root = root
         self.coco = COCO(ann_file)
-        self.ids = list(sorted(self.coco.imgs.keys()))
+        self.ids = sorted(list(self.coco.imgs.keys()))
         self.img_size = img_size
         self.mosaic = mosaic
-        self.transform = transform
         
-        # Map category IDs to continuous index (0-79)
+        # Map category IDs to continuous index
         self.cats = {i: v['name'] for i, v in self.coco.cats.items()}
         self.cat_id_to_num = {cat_id: i for i, cat_id in enumerate(self.cats.keys())}
 
@@ -31,27 +22,23 @@ class COCODataset(Dataset):
         return len(self.ids)
 
     def __getitem__(self, index):
-        # 1. Apply Mosaic Augmentation with 50% probability if enabled
         if self.mosaic and random.random() < 0.5:
             img, boxes, labels = self.load_mosaic(index)
         else:
-            # Standard load + Resize (Letterbox)
             img, boxes, labels = self.load_image_and_boxes(index)
             img, boxes = self.letterbox_resize(img, boxes, self.img_size)
 
-        # 2. Convert to Tensor & Normalize
-        # Normalize to [0, 1]
-        img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
+        # Preprocess: BGR->RGB, HWC->CHW, Normalize 0-1
+        img = img.transpose((2, 0, 1))[::-1] 
         img = np.ascontiguousarray(img)
-        
         img_tensor = torch.from_numpy(img).float() / 255.0
         
-        # Create Target Dict
-        target = {}
-        target['boxes'] = torch.as_tensor(boxes, dtype=torch.float32)
-        target['labels'] = torch.as_tensor(labels, dtype=torch.int64)
+        target = {
+            'boxes': torch.as_tensor(boxes, dtype=torch.float32),
+            'labels': torch.as_tensor(labels, dtype=torch.int64)
+        }
         
-        # Handle empty boxes (crucial for stability)
+        # Handle empty targets
         if target['boxes'].shape[0] == 0:
             target['boxes'] = torch.zeros((0, 4), dtype=torch.float32)
             target['labels'] = torch.zeros((0,), dtype=torch.int64)
@@ -59,46 +46,33 @@ class COCODataset(Dataset):
         return img_tensor, target
 
     def load_image_and_boxes(self, index):
-        """Helper to load 1 image and its annotations"""
         img_id = self.ids[index]
         file_name = self.coco.loadImgs(img_id)[0]['file_name']
-        img_path = os.path.join(self.root, file_name)
+        img = cv2.imread(os.path.join(self.root, file_name))
         
-        # Load image using OpenCV
-        img = cv2.imread(img_path)
-        h, w = img.shape[:2]
-        
-        # Load annotations
         ann_ids = self.coco.getAnnIds(imgIds=img_id)
         anns = self.coco.loadAnns(ann_ids)
         
-        boxes = []
-        labels = []
+        boxes, labels = [], []
         for ann in anns:
             if ann.get('iscrowd', 0): continue
-            x, y, wb, hb = ann['bbox']
-            boxes.append([x, y, x + wb, y + hb])
+            x, y, w, h = ann['bbox']
+            boxes.append([x, y, x + w, y + h])
             labels.append(self.cat_id_to_num[ann['category_id']])
             
         return img, np.array(boxes), np.array(labels)
 
     def letterbox_resize(self, img, boxes, target_size):
-        """Resize image with padding to keep aspect ratio (Letterbox)"""
         h, w = img.shape[:2]
         scale = min(target_size / h, target_size / w)
         nw, nh = int(w * scale), int(h * scale)
         
         img_resized = cv2.resize(img, (nw, nh))
-        
-        # Create padded image (gray background)
         img_padded = np.full((target_size, target_size, 3), 114, dtype=np.uint8)
         
-        # Center the image
-        dx = (target_size - nw) // 2
-        dy = (target_size - nh) // 2
+        dx, dy = (target_size - nw) // 2, (target_size - nh) // 2
         img_padded[dy:dy+nh, dx:dx+nw] = img_resized
         
-        # Adjust boxes
         if len(boxes) > 0:
             boxes *= scale
             boxes[:, [0, 2]] += dx
@@ -107,28 +81,17 @@ class COCODataset(Dataset):
         return img_padded, boxes
 
     def load_mosaic(self, index):
-        """
-        MOSAIC AUGMENTATION: Loads 4 images and stitches them into 1.
-        This is the SOTA standard for object detection.
-        """
-        labels4, boxes4 = [], []
         s = self.img_size
-        
-        # 1. Center point of the mosaic
         xc, yc = [int(random.uniform(s * 0.5, s * 1.5)) for _ in range(2)]
-        
-        # 2. Pick 3 other random indices
         indices = [index] + [random.randint(0, len(self.ids) - 1) for _ in range(3)]
         
-        # 3. Create large canvas (2x size)
         img4 = np.full((s * 2, s * 2, 3), 114, dtype=np.uint8)
+        labels4, boxes4 = [], []
         
         for i, idx in enumerate(indices):
-            # Load image
             img, boxes, labels = self.load_image_and_boxes(idx)
             h, w = img.shape[:2]
             
-            # Place image into the canvas
             if i == 0:  # top-left
                 x1a, y1a, x2a, y2a = max(xc - w, 0), max(yc - h, 0), xc, yc
                 x1b, y1b, x2b, y2b = w - (x2a - x1a), h - (y2a - y1a), w, h
@@ -143,29 +106,21 @@ class COCODataset(Dataset):
                 x1b, y1b, x2b, y2b = 0, 0, min(w, x2a - x1a), min(h, y2a - y1a)
 
             img4[y1a:y2a, x1a:x2a] = img[y1b:y2b, x1b:x2b]
-            padw = x1a - x1b
-            padh = y1a - y1b
+            padw, padh = x1a - x1b, y1a - y1b
             
-            # Shift boxes
             if len(boxes) > 0:
                 boxes[:, [0, 2]] += padw
                 boxes[:, [1, 3]] += padh
                 labels4.append(labels)
                 boxes4.append(boxes)
                 
-        # Concat labels & boxes
         if len(labels4) > 0:
             labels4 = np.concatenate(labels4, 0)
             boxes4 = np.concatenate(boxes4, 0)
-            
-            # Clip boxes to fit inside the mosaic image (0 to 2*s)
             np.clip(boxes4, 0, 2 * s, out=boxes4)
         
-        # 4. Resize back to target size (s)
-        # We created a 2x canvas, now resize it down to input size (s)
-        # This acts like a random zoom/crop
+        # Resize from 2x canvas back to target size
         img4_resized = cv2.resize(img4, (s, s))
-        if len(boxes4) > 0:
-            boxes4 *= 0.5 # Scale boxes down by 2
+        if len(boxes4) > 0: boxes4 *= 0.5
             
         return img4_resized, boxes4, labels4

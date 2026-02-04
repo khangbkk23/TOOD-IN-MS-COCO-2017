@@ -1,5 +1,5 @@
-dataset:
-  rootdir: "data/coco"
+data:
+  root_dir: "data/coco"
   train_imgs: "train2017"
   val_imgs: "val2017"
   train_ann: "annotations/instances_train2017.json"
