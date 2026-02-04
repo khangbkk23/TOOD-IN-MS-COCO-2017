@@ -1,0 +1,49 @@
+dataset:
+  rootdir: "data/coco"
+  train_imgs: "train2017"
+  val_imgs: "val2017"
+  train_ann: "annotations/instances_train2017.json"
+  val_ann: "annotations/instances_val2017.json"
+  # Preprocessing & Dataloader
+  img_size: 640
+  batch_size: 4
+  num_workers: 4
+  use_mosaic: True
+  num_classes: 80
+
+# --- MODEL ARCHITECTURE ---
+model:
+  backbone: "resnet50"
+  pretrained: True
+  frozen_bn: True
+  
+  neck:
+    type: "fpn"
+    out_channels: 256
+    
+  head:
+    type: "tood_head"
+    num_anchors: 1
+    feat_channels: 256
+
+# --- HYPERPARAMETERS (TAL - Task Alignment Learning) ---
+tal:
+  topk: 13                # Number of candidates to select (k)
+  alpha: 1.0              # Power for classification score in metric t
+  beta: 6.0               # Power for IoU in metric t
+
+# --- TRAINING SETTINGS ---
+train:
+  epochs: 12              # Standard 1x schedule
+  lr: 0.01                # Base Learning Rate (SGD)
+  momentum: 0.9
+  weight_decay: 0.0001
+  optimizer: "SGD"        # Stochastic Gradient Descent
+  
+  # Checkpointing
+  save_dir: "./checkpoints"
+  val_interval: 1         # Run validation every epoch
+  print_freq: 50          # Log every 50 iterations
+
+device: "cuda"            # 'cuda' or 'cpu'
+seed: 42                  # For reproducibility

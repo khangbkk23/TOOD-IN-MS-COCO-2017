@@ -1,0 +1,5 @@
+torch
+torchvision
+pyyaml
+cv2
+pycocotools
