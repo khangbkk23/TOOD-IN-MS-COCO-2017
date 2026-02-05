@@ -1,3 +1,5 @@
+#Utils
+import torch
 # Config
 from utils.config import load_config
 # Data
@@ -7,6 +9,7 @@ from torch.utils.data import DataLoader
 # Model
 from models.backbones.resnet import ResNet
 from models.necks.fpn import FPN
+from models.detectors.tood import TOOD
 cfg = load_config("./config/config.yaml")
 
 train_dataset = COCODataset(
@@ -25,30 +28,14 @@ train_loader = DataLoader(
 )
 
 # Building model
+model = TOOD(cfg).to(cfg.device)
 
-backbone = ResNet(
-    pretrained=cfg.model.pretrained, 
-    frozen_bn=cfg.model.frozen_bn
-).to(cfg.device)
+images, targets = next(iter(train_loader))
+images = images.to(cfg.device)
 
-neck = FPN(
-    in_channels=[512, 1024, 2048], 
-    out_channels=cfg.model.neck.out_channels
-).to(cfg.device)
+with torch.no_grad():
+    cls_outs, reg_outs = model(images)
 
-print("Model initialized successfully!")
-try:
-    images, targets = next(iter(train_loader))
-    images = images.to(cfg.device)
-    
-    features = backbone(images)
-    print(f"Backbone outputs: {[f.shape for f in features]}")
-    fpn_feats = neck(features)
-    print(f"FPN outputs: {[f.shape for f in fpn_feats]}")
-    
-    print("Architecture shapes are correct!")
-    
-except Exception as e:
-    print(f"Error during dry run: {e}")
-    
-print(f"Running on {cfg.device} with Image Size {cfg.data.img_size}")
+print(f"Model TOOD initialized!")
+print(f"Num levels: {len(cls_outs)}")
+print(f"Class output shape [P3]: {cls_outs[0].shape}")
