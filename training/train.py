@@ -18,11 +18,6 @@ from models.utils.anchors import make_anchors
 from utils.box_ops import box_iou, dist2bbox
 
 def quality_focal_loss(pred, target, beta=2.0):
-    """
-    Quality Focal Loss for task-aligned classification.
-    pred: predicted logits [N, C]
-    target: alignment metric t [N]
-    """
     pred_sigmoid = pred.sigmoid()
     scale_factor = (pred_sigmoid - target).abs().pow(beta)
     loss = nn.functional.binary_cross_entropy_with_logits(pred, target, reduction='none') * scale_factor
@@ -43,7 +38,6 @@ def train():
     cfg = load_config("./config/config.yaml")
     device = torch.device(cfg.device if torch.cuda.is_available() else "cpu")
     
-    # 2. Setup DataLoaders
     train_dataset = COCODataset(
         root=f"{cfg.data.root_dir}/{cfg.data.train_imgs}",
         ann_file=f"{cfg.data.root_dir}/{cfg.data.train_ann}",
@@ -57,10 +51,9 @@ def train():
         num_workers=cfg.data.num_workers,
         collate_fn=collate_fn,
         shuffle=True,
-        pin_memory=True # Optimization for GPU training
+        pin_memory=True
     )
     
-    # 3. Initialize Model and Components
     model = TOOD(cfg).to(device)
     assigner = TaskAlignedAssigner(
         topk=cfg.tal.topk, 
@@ -68,8 +61,7 @@ def train():
         beta=cfg.tal.beta,
         num_classes=cfg.data.num_classes
     )
-    
-    # 4. Optimizer and Scheduler
+
     optimizer = optim.SGD(
         model.parameters(), 
         lr=cfg.train.lr, 
@@ -77,7 +69,6 @@ def train():
         weight_decay=cfg.train.weight_decay
     )
     
-    # 5. Training loop
     print(f"Starting training on {device} for {cfg.train.epochs} epochs...")
     os.makedirs(cfg.train.save_dir, exist_ok=True)
     
@@ -134,7 +125,7 @@ def train():
                     batch_reg_loss += get_giou_loss(
                         pd_bboxes[j][pos_idx], 
                         target_bboxes[pos_idx], 
-                        weight=target_scores[pos_idx].unsqueeze(-1)
+                        weight=target_scores[pos_idx]
                     )
 
             total_loss = (batch_cls_loss + batch_reg_loss) / len(targets)
