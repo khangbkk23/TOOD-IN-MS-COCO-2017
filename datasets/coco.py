@@ -13,8 +13,7 @@ class COCODataset(Dataset):
         self.ids = sorted(list(self.coco.imgs.keys()))
         self.img_size = img_size
         self.mosaic = mosaic
-        
-        # Map category IDs to continuous index
+
         self.cats = {i: v['name'] for i, v in self.coco.cats.items()}
         self.cat_id_to_num = {cat_id: i for i, cat_id in enumerate(self.cats.keys())}
 
@@ -28,7 +27,7 @@ class COCODataset(Dataset):
             img, boxes, labels = self.load_image_and_boxes(index)
             img, boxes = self.letterbox_resize(img, boxes, self.img_size)
 
-        # Preprocess: BGR->RGB, HWC->CHW, Normalize 0-1
+        # BGR->RGB, HWC->CHW, Normalize 0-1
         img = img.transpose((2, 0, 1))[::-1] 
         img = np.ascontiguousarray(img)
         img_tensor = torch.from_numpy(img).float() / 255.0

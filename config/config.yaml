@@ -26,7 +26,7 @@ model:
     num_anchors: 1
     feat_channels: 256
 
-# --- HYPERPARAMETERS (TAL - Task Alignment Learning) ---
+# --- HYPERPARAMETERS ---
 tal:
   topk: 13                # Number of candidates to select (k)
   alpha: 1.0              # Power for classification score in metric t
