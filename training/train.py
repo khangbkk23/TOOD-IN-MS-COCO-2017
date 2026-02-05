@@ -5,7 +5,8 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.append(ROOT_DIR)
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 
 # Import custom modules
 from utils.config import load_config
@@ -13,8 +14,8 @@ from datasets.coco import COCODataset
 from datasets.collate import collate_fn
 from models.detectors.tood import TOOD
 from models.assigners.task_aligned_assigner import TaskAlignedAssigner
-from models.utils.anchors import make_anchors, dist2bbox
-from utils.box_ops import box_iou
+from models.utils.anchors import make_anchors
+from utils.box_ops import box_iou, dist2bbox
 
 def quality_focal_loss(pred, target, beta=2.0):
     """

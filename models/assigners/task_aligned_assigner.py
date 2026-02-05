@@ -1,13 +1,13 @@
 import torch
 import torch.nn as nn
-from utils.box_ops import box_iou # Giả định bạn sẽ tạo file utils này
+from utils.box_ops import box_iou
 
 class TaskAlignedAssigner(nn.Module):
     def __init__(self, topk=13, alpha=1.0, beta=6.0, num_classes=80):
         super().__init__()
         self.topk = topk
-        self.alpha = alpha # Power for classification score
-        self.beta = beta   # Power for IoU
+        self.alpha = alpha
+        self.beta = beta
         self.num_classes = num_classes
 
     @torch.no_grad()
@@ -45,7 +45,7 @@ class TaskAlignedAssigner(nn.Module):
         max_metrics, max_indices = alignment_metrics.max(dim=0)
         
         target_labels = gt_labels[max_indices].flatten()
-        target_labels[max_metrics <= 0] = self.num_classes # Nhãn background
+        target_labels[max_metrics <= 0] = self.num_classes
         
         target_bboxes = gt_bboxes[max_indices]
 

@@ -20,11 +20,15 @@ def box_iou(boxes1, boxes2):
 
 def dist2bbox(distance, anchor_points, stride):
     """
-    distance: [N, 4] (l, t, r, b)
-    anchor_points: [N, 2] (x, y)
+    Decode distance (l, t, r, b) to bboxes (x1, y1, x2, y2).
+    Supports both single image [N, 4] and batch [B, N, 4].
     """
-    x1 = anchor_points[:, 0] - distance[:, 0]
-    y1 = anchor_points[:, 1] - distance[:, 1]
-    x2 = anchor_points[:, 0] + distance[:, 2]
-    y2 = anchor_points[:, 1] + distance[:, 3]
-    return torch.stack([x1, y1, x2, y2], dim=-1) * stride
+    # distance: [B, N, 4], anchor_points: [N, 2], stride: [N, 1]
+    # Use ellipsis (...) to support dynamic batch dimension
+    x1 = anchor_points[..., 0] - distance[..., 0]
+    y1 = anchor_points[..., 1] - distance[..., 1]
+    x2 = anchor_points[..., 0] + distance[..., 2]
+    y2 = anchor_points[..., 1] + distance[..., 3]
+    
+    bboxes = torch.stack([x1, y1, x2, y2], dim=-1)
+    return bboxes * stride
